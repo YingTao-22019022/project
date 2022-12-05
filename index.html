@@ -1,0 +1,185 @@
+<html>
+
+<head>
+    <!-- This is an HTML comment -->
+    <!-- Below we are grabbing three.js and some helper stuff for using the camera -->
+    <script src="https://mimicproject.com/libs/maximilian.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r126/three.min.js"
+        integrity="sha512-n8IpKWzDnBOcBhRlHirMZOUvEq2bLRMuJGjuVqbzUJwtTsgwOgK5aS0c1JA647XWYfqvXve8k3PtZdzpipFjgg=="
+        crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/three@0.126.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://unpkg.com/three@0.126.0/examples/js/loaders/RGBELoader.js"></script>
+    <script src="orbitControls.js"></script>
+
+    <meta charset="utf-8">
+    <style>
+        body {
+            margin: 0px;
+            background-color: #000000;
+            overflow: hidden;
+        }
+    </style>
+</head>
+
+<body>
+    <script>
+        //music
+        var maximJs = maximilian();
+        var maxiAudio = new maximJs.maxiAudio();
+        var music = new maximJs.maxiSample();
+        var music2 = new maximJs.maxiSample();
+        var myClock = new maximJs.maxiClock();
+        var myOsc = new maximJs.maxiOsc();
+        var myDelay = new maximJs.maxiDelayline();
+        var musicCount = 9;
+        var musicPitch = 0.75;
+        var music2Pitch = 1.2;
+        var music2Gain = 1.0;
+        var myTempo = 60;
+        var delayTime = ((myTempo / 60 * 44100) / 16) * 3;
+        var feedback = 0.6;
+        myClock.setTempo(myTempo);
+        myClock.setTicksPerBeat(3);
+        maxiAudio.init();
+        maxiAudio.loadSample('music.mp3', music);
+        maxiAudio.loadSample('music2.mp3', music2);
+        function drummer() {
+            var out = 0;
+            myClock.ticker();
+            out = (0.3 * music.playOnce(musicPitch)) + (music2Gain * music2.playOnce(Math.abs(myOsc.phasor(music2Pitch))));
+            return out + myDelay.dl(out, delayTime, feedback);
+        }
+        maxiAudio.play = function () {
+            return drummer();
+        }
+
+        //3d
+        var camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 1, 1000);
+        var scene = new THREE.Scene();
+        var geometry = new THREE.TorusGeometry(14, 2, 20, 100);
+        var spheres = [];
+
+        //material   
+        var myTextureLoader = new THREE.TextureLoader();
+        var myTexture = myTextureLoader.load('01.jpeg');
+        var myTexture2 = new THREE.TextureLoader().load("02.jpeg");
+        var myTexture3 = new THREE.TextureLoader().load("03.jpg");
+        var material = new THREE.MeshToonMaterial({
+            bumpMap: myTexture3,
+            bumpScale: 1
+        });
+        const hdrEquirect = new THREE.RGBELoader().load(
+            "empty_warehouse_01_2k.hdr",
+            () => {
+                hdrEquirect.mapping = THREE.EquirectangularReflectionMapping;
+            }
+        );
+        var material2 = new THREE.MeshPhysicalMaterial({
+            color: 0xb8f1ff,
+            transparent: true,
+            roughness: 0.3,
+            metalness: 0.3,
+            reflectivity: 0.35,
+            transmission: 0.5,
+            thickness: 1,
+            envMap: hdrEquirect
+        });
+        var material3 = new THREE.MeshNormalMaterial({
+            bumpMap: myTexture2,
+            bumpScale: 0.6
+        })
+        var material4 = new THREE.MeshPhysicalMaterial({
+            color: 0xff94c2,
+            emissive: 0x5b5cac,
+            roughness: 0.5,
+            metalness: 1,
+            reflectivity: 1,
+        });
+
+        var mesh = new THREE.Mesh(geometry, material2);
+
+        //light   
+        var light = new THREE.DirectionalLight(0xffffff, 1);
+        light.position.set(0, 5, 10);
+        scene.add(light);
+        const pointLight = new THREE.PointLight(0x005c8f, 1, 100);
+        pointLight.position.set(20, 20, 20);
+        scene.add(pointLight);
+
+        var renderer = new THREE.WebGLRenderer();
+
+        //background
+        const bgTexture = new THREE.TextureLoader().load("background.jpeg");
+        const bgGeometry = new THREE.PlaneGeometry(10, 6);
+        const bgMaterial = new THREE.MeshBasicMaterial({ map: bgTexture });
+        const bgMesh = new THREE.Mesh(bgGeometry, bgMaterial);
+        bgMesh.position.set(0, 0, -30);
+        bgMesh.scale.set(20, 20, 20);
+        scene.add(bgMesh);
+
+        camera.position.z = 25;
+        scene.add(mesh);
+
+        //model   
+        var loader = new THREE.GLTFLoader();
+        var model = null;
+        loader.load(
+            'tree.glb',
+            function (gltf) {
+                model = gltf.scene.children[0];
+                let eometry = model.geometry;
+                model.material = material;
+                model.position.set(0, -13, 0);
+                model.scale.set(0.05, 0.05, 0.05);
+                scene.add(model);
+            }
+        )
+
+        const ball = new THREE.SphereGeometry(0.3, 32, 16);
+        for (let i = 0; i < 50; i++) {
+            const mesh = new THREE.Mesh(ball, material4);
+            mesh.position.x = Math.random() * 30 - 15;
+            mesh.position.y = Math.random() * 30 - 15;
+            mesh.position.z = Math.random() * 30;
+            mesh.scale.x = mesh.scale.y = mesh.scale.z = Math.random() * 3 + 1;
+            scene.add(mesh);
+            spheres.push(mesh);
+        }
+
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+        window.addEventListener('resize', onWindowResize, false);
+        var controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+        //  Now we can have a draw loop.    
+        function draw() {
+            var timer = 0.0001 * Date.now();
+            mesh.position.x = -0.5;
+            mesh.rotation.y += 0.01;
+            controls.update();
+            for (let i = 0, il = spheres.length; i < il; i++) {
+                const sphere = spheres[i];
+                sphere.position.x = 50 * Math.sin(timer + i);
+                sphere.position.y = 50 * Math.cos(timer - i * 2.2);
+                sphere.position.z = 30 * Math.sin(timer + i);
+            }
+
+            renderer.render(scene, camera);
+            requestAnimationFrame(draw);
+        }
+
+        // This is the thing that does the resizing      
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Finally, call the draw loop.      
+        requestAnimationFrame(draw());
+
+    </script>
+</body>
+
+</html>
